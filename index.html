@@ -439,7 +439,7 @@
 
   <script>
     // Supabase Client Reference
-    let supabase = null;
+    let supabaseClient = null;
 
     // Optional Override settings
     window.AUTOHEAL_SUPABASE_URL = "";
@@ -473,7 +473,7 @@
       // 2. Initialize client
       if (url && key) {
         try {
-          supabase = window.supabase.createClient(url, key);
+          supabaseClient = window.supabase.createClient(url, key);
           console.log("Supabase client initialized successfully.");
           checkActiveSession();
         } catch (err) {
@@ -486,9 +486,9 @@
 
     // Check if there is an active session
     async function checkActiveSession() {
-      if (!supabase) return;
+      if (!supabaseClient) return;
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
         if (error) throw error;
         if (session && session.user) {
           console.log("Active Supabase session found:", session.user.email);
@@ -593,9 +593,9 @@
       loginBtn.disabled = true;
       loginBtn.textContent = "Verifying...";
 
-      if (supabase) {
+      if (supabaseClient) {
         try {
-          const { data, error } = await supabase.auth.signInWithPassword({
+          const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: pass,
           });
@@ -648,9 +648,9 @@
       signupBtn.disabled = true;
       signupBtn.textContent = "Creating Account...";
 
-      if (supabase) {
+      if (supabaseClient) {
         try {
-          const { data, error } = await supabase.auth.signUp({
+          const { data, error } = await supabaseClient.auth.signUp({
             email: email,
             password: pass,
             options: {
@@ -708,9 +708,9 @@
       logoutBtn.disabled = true;
       logoutBtn.textContent = "Signing out...";
 
-      if (supabase) {
+      if (supabaseClient) {
         try {
-          const { error } = await supabase.auth.signOut();
+          const { error } = await supabaseClient.auth.signOut();
           if (error) {
             console.error("Sign out error:", error);
           }
