@@ -2,3 +2,5 @@
 .autoheal.json
 node_modules
 dist
+
+.vercel

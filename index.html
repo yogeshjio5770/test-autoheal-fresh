@@ -9,12 +9,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <!-- AutoHeal SDK: AI-powered self-healing -->
   <script>
     window.AUTOHEAL_SITE_ID = "my-awesome-startup";
     window.AUTOHEAL_ENDPOINT = "https://auomation.vercel.app";
   </script>
-  <script src="https://auomation.vercel.app/sdk/autoheal.js"></script>
+  <script src="https://auomation.vercel.app/sdk/autoheal.js?v=1.1.0"></script>
 
   <style>
     :root {
@@ -435,9 +438,71 @@
   </div>
 
   <script>
+    // Supabase Client Reference
+    let supabase = null;
+
+    // Optional Override settings
+    window.AUTOHEAL_SUPABASE_URL = "";
+    window.AUTOHEAL_SUPABASE_ANON_KEY = "";
+
     // Navigation routing State
     let currentView = 'home';
     const viewHistory = [];
+
+    // Initialize Supabase dynamically by fetching config from the backend
+    async function initSupabase() {
+      let url = window.AUTOHEAL_SUPABASE_URL;
+      let key = window.AUTOHEAL_SUPABASE_ANON_KEY;
+
+      // 1. Fetch from Render backend config if not hardcoded
+      if (!url || !key) {
+        try {
+          const endpoint = window.AUTOHEAL_ENDPOINT || "https://autoheal-4p4q.onrender.com";
+          const res = await fetch(`${endpoint}/api/auth/config`);
+          const data = await res.json();
+          if (data.success && data.supabaseUrl && data.supabaseAnonKey) {
+            url = data.supabaseUrl;
+            key = data.supabaseAnonKey;
+            console.log("Successfully retrieved Supabase config from backend.");
+          }
+        } catch (err) {
+          console.warn("Failed to fetch Supabase config from backend:", err);
+        }
+      }
+
+      // 2. Initialize client
+      if (url && key) {
+        try {
+          supabase = window.supabase.createClient(url, key);
+          console.log("Supabase client initialized successfully.");
+          checkActiveSession();
+        } catch (err) {
+          console.error("Error creating Supabase client:", err);
+        }
+      } else {
+        console.log("Running in beautiful Demo Mode (Supabase not configured).");
+      }
+    }
+
+    // Check if there is an active session
+    async function checkActiveSession() {
+      if (!supabase) return;
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (session && session.user) {
+          console.log("Active Supabase session found:", session.user.email);
+          const email = session.user.email;
+          document.getElementById('dashboard-welcome-msg').textContent = "Logged in via Supabase as " + email + ". Secure session active.";
+          navigateTo('dashboard');
+        }
+      } catch (err) {
+        console.error("Active session check error:", err);
+      }
+    }
+
+    // Trigger initialization on script load
+    initSupabase();
 
     // Navigation triggers
     function navigateTo(viewId) {
@@ -503,7 +568,7 @@
       }
     });
 
-    // Simulated actions
+    // Notification Alert Toast
     function triggerAlert(msg) {
       const alert = document.getElementById('alert-message');
       alert.textContent = msg;
@@ -513,7 +578,8 @@
       }, 4000);
     }
 
-    function submitLogin() {
+    // Real Supabase Sign In / Log In
+    async function submitLogin() {
       const email = document.getElementById('login-email').value.trim();
       const pass = document.getElementById('login-pass').value.trim();
 
@@ -522,14 +588,52 @@
         return;
       }
 
-      triggerAlert("✨ Welcome back, " + email + "!");
-      document.getElementById('dashboard-welcome-msg').textContent = "Logged in as " + email + ". You now have unrestricted developer access to live healing databases.";
-      setTimeout(() => {
-        navigateTo('dashboard');
-      }, 600);
+      const loginBtn = document.querySelector('#view-login .primary-btn');
+      const originalText = loginBtn.textContent;
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Verifying...";
+
+      if (supabase) {
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: pass,
+          });
+
+          if (error) {
+            triggerAlert("❌ Login failed: " + error.message);
+            loginBtn.disabled = false;
+            loginBtn.textContent = originalText;
+            return;
+          }
+
+          triggerAlert("✨ Welcome back!");
+          document.getElementById('dashboard-welcome-msg').textContent = "Logged in via Supabase as " + data.user.email + ". Secure session active.";
+          setTimeout(() => {
+            navigateTo('dashboard');
+            loginBtn.disabled = false;
+            loginBtn.textContent = originalText;
+          }, 600);
+
+        } catch (err) {
+          triggerAlert("❌ Authentication error: " + err.message);
+          loginBtn.disabled = false;
+          loginBtn.textContent = originalText;
+        }
+      } else {
+        // Fallback to simulated login (Demo Mode)
+        triggerAlert("✨ Demo Mode: Welcome back, " + email + "!");
+        document.getElementById('dashboard-welcome-msg').textContent = "Logged in as " + email + " (Demo Mode). Configure Supabase in Render backend for live auth.";
+        setTimeout(() => {
+          navigateTo('dashboard');
+          loginBtn.disabled = false;
+          loginBtn.textContent = originalText;
+        }, 600);
+      }
     }
 
-    function submitSignup() {
+    // Real Supabase User Registration
+    async function submitSignup() {
       const name = document.getElementById('signup-name').value.trim();
       const email = document.getElementById('signup-email').value.trim();
       const pass = document.getElementById('signup-pass').value.trim();
@@ -539,22 +643,93 @@
         return;
       }
 
-      triggerAlert("🚀 Account created successfully!");
-      document.getElementById('dashboard-welcome-msg').textContent = "Welcome, " + name + "! Your workspace configuration settings have been initialized automatically.";
-      setTimeout(() => {
-        navigateTo('dashboard');
-      }, 600);
+      const signupBtn = document.querySelector('#view-signup .primary-btn');
+      const originalText = signupBtn.textContent;
+      signupBtn.disabled = true;
+      signupBtn.textContent = "Creating Account...";
+
+      if (supabase) {
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email: email,
+            password: pass,
+            options: {
+              data: {
+                full_name: name
+              }
+            }
+          });
+
+          if (error) {
+            triggerAlert("❌ Sign up failed: " + error.message);
+            signupBtn.disabled = false;
+            signupBtn.textContent = originalText;
+            return;
+          }
+
+          if (data.session) {
+            triggerAlert("🚀 Account created successfully!");
+            document.getElementById('dashboard-welcome-msg').textContent = "Welcome, " + name + "! Logged in via Supabase as " + data.user.email + ". Secure session active.";
+            setTimeout(() => {
+              navigateTo('dashboard');
+              signupBtn.disabled = false;
+              signupBtn.textContent = originalText;
+            }, 600);
+          } else {
+            triggerAlert("✉️ Sign up success! Check your email to confirm registration.");
+            signupBtn.disabled = false;
+            signupBtn.textContent = originalText;
+            setTimeout(() => {
+              navigateTo('login');
+            }, 2500);
+          }
+
+        } catch (err) {
+          triggerAlert("❌ Sign up error: " + err.message);
+          signupBtn.disabled = false;
+          signupBtn.textContent = originalText;
+        }
+      } else {
+        // Fallback to simulated signup (Demo Mode)
+        triggerAlert("🚀 Demo Mode: Account created successfully!");
+        document.getElementById('dashboard-welcome-msg').textContent = "Welcome, " + name + "! Your workspace configuration has been initialized automatically (Demo Mode).";
+        setTimeout(() => {
+          navigateTo('dashboard');
+          signupBtn.disabled = false;
+          signupBtn.textContent = originalText;
+        }, 600);
+      }
     }
 
-    function logout() {
+    // Real Supabase User Sign Out
+    async function logout() {
+      const logoutBtn = document.querySelector('#view-dashboard .secondary-btn');
+      const originalText = logoutBtn.textContent;
+      logoutBtn.disabled = true;
+      logoutBtn.textContent = "Signing out...";
+
+      if (supabase) {
+        try {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            console.error("Sign out error:", error);
+          }
+        } catch (err) {
+          console.error("Sign out exception:", err);
+        }
+      }
+
       triggerAlert("Signed out successfully.");
       document.getElementById('login-email').value = "";
       document.getElementById('login-pass').value = "";
       document.getElementById('signup-name').value = "";
       document.getElementById('signup-email').value = "";
       document.getElementById('signup-pass').value = "";
+      
       setTimeout(() => {
         navigateTo('home');
+        logoutBtn.disabled = false;
+        logoutBtn.textContent = originalText;
       }, 600);
     }
   </script>
